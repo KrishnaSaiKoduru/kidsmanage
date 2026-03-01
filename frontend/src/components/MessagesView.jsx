@@ -35,17 +35,17 @@ export default function MessagesView() {
   const [userSearch, setUserSearch] = useState('');
   const [groupTitle, setGroupTitle] = useState('');
 
-  const fetchConversations = () => {
+  const fetchConversations = (showErrors = true) => {
     api.get('/messages/conversations')
       .then(setConversations)
-      .catch((err) => toast.error(err.message))
+      .catch((err) => { if (showErrors) toast.error(err.message); })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { fetchConversations(); }, []);
 
   useEffect(() => {
-    const interval = setInterval(fetchConversations, 5000);
+    const interval = setInterval(() => fetchConversations(false), 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -58,7 +58,7 @@ export default function MessagesView() {
           markAsRead(activeId);
         }
       }).catch(() => {});
-    }, 5000);
+    }, 10000);
     return () => clearInterval(interval);
   }, [activeId]);
 

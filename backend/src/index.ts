@@ -36,7 +36,8 @@ app.use(cors({
     if (!origin || allowed.some((url) => origin === url || origin === url.replace(/\/$/, ''))) {
       callback(null, true);
     } else {
-      callback(new Error(`CORS: origin ${origin} not allowed`));
+      console.warn(`[CORS] Blocked origin: ${origin} | Allowed: ${allowed.join(', ')}`);
+      callback(null, false); // Omit CORS headers instead of throwing (avoids 500)
     }
   },
   credentials: true,
@@ -77,5 +78,6 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`KidsManage API running on http://localhost:${PORT}`);
-  console.log(`CORS allowed origin: ${process.env.FRONTEND_URL || '(not set — using localhost only)'}`);
+  console.log(`NODE_ENV: ${process.env.NODE_ENV || '(not set)'}`);
+  console.log(`CORS allowed origins: ${[process.env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:4173'].filter(Boolean).join(', ')}`);
 });

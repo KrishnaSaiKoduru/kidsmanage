@@ -12,8 +12,8 @@ export class AppError extends Error {
   }
 }
 
-export function errorHandler(err: Error, _req: Request, res: Response, _next: NextFunction) {
-  console.error('[Error]', err);
+export function errorHandler(err: Error, req: Request, res: Response, _next: NextFunction) {
+  console.error(`[Error] ${req.method} ${req.originalUrl}:`, err.name, err.message, err.stack?.split('\n').slice(0, 3).join('\n'));
 
   if (err instanceof AppError) {
     res.status(err.statusCode).json({ error: err.message });

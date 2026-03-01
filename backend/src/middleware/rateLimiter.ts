@@ -4,7 +4,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDev ? 10000 : 300,  // generous in dev; 300 req/15min in production
+  max: isDev ? 10000 : 1000, // generous in dev; 1000 req/15min in production (polling-friendly)
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
