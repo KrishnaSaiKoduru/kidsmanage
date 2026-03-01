@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/errorHandler';
+import { notifyUsers } from '../notifications/notifications.service';
 
 export async function checkIn(centerId: string, data: {
   childId: string;
@@ -32,7 +33,7 @@ export async function checkIn(centerId: string, data: {
     throw new AppError(400, 'Child is already checked in');
   }
 
-  return prisma.attendanceRecord.create({
+  const record = await prisma.attendanceRecord.create({
     data: {
       childId: data.childId,
       centerId,
@@ -45,6 +46,25 @@ export async function checkIn(centerId: string, data: {
       child: { select: { firstName: true, lastName: true, room: true } },
     },
   });
+
+  // Notify parents of check-in
+  const parentLinks = await prisma.parentChild.findMany({
+    where: { childId: data.childId },
+    select: { parentId: true },
+  });
+  const parentIds = parentLinks.map((p) => p.parentId);
+  if (parentIds.length > 0) {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    notifyUsers(
+      centerId,
+      parentIds,
+      `${record.child.firstName} Checked In`,
+      `${record.child.firstName} ${record.child.lastName} was checked in at ${time}.`,
+      '/attendance',
+    );
+  }
+
+  return record;
 }
 
 export async function checkOut(centerId: string, data: {
@@ -67,7 +87,7 @@ export async function checkOut(centerId: string, data: {
     throw new AppError(400, 'No active check-in found for today');
   }
 
-  return prisma.attendanceRecord.update({
+  const updated = await prisma.attendanceRecord.update({
     where: { id: record.id },
     data: {
       checkOut: new Date(),
@@ -77,6 +97,25 @@ export async function checkOut(centerId: string, data: {
       child: { select: { firstName: true, lastName: true, room: true } },
     },
   });
+
+  // Notify parents of check-out
+  const parentLinks = await prisma.parentChild.findMany({
+    where: { childId: data.childId },
+    select: { parentId: true },
+  });
+  const parentIds = parentLinks.map((p) => p.parentId);
+  if (parentIds.length > 0) {
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    notifyUsers(
+      centerId,
+      parentIds,
+      `${updated.child.firstName} Checked Out`,
+      `${updated.child.firstName} ${updated.child.lastName} was checked out at ${time}.`,
+      '/attendance',
+    );
+  }
+
+  return updated;
 }
 
 export async function getTodayAttendance(centerId: string) {

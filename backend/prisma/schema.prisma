@@ -77,6 +77,7 @@ model Center {
   capacity         Int      @default(0)
   stripeCustomerId String?
   planTier         PlanTier @default(FREE)
+  taxRate          Float    @default(0) // Tax percentage (e.g. 8.25 = 8.25%)
   joinCode         String?  @unique
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -102,6 +103,17 @@ model User {
   role       UserRole   @default(PARENT)
   status     UserStatus @default(ACTIVE)
   avatarUrl  String?
+  
+  // Extended Profile Fields
+  address                  String?
+  emergencyContactName     String?
+  emergencyContactPhone    String?
+  emergencyContactRelation String?
+  employer                 String?
+  authorizedPickups        String? // Parents: Comma separated list of authorized pickup people
+  bio                      String? // Caretakers: Background, experience
+  jobTitle                 String? // Caretakers: Lead Teacher, Assistant, etc.
+  certifications           String? // Caretakers: CPR, First Aid, Early Childhood Ed.
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
@@ -130,11 +142,12 @@ model Child {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  center            Center             @relation(fields: [centerId], references: [id])
-  parentChildren    ParentChild[]
-  attendanceRecords AttendanceRecord[]
-  invoices          Invoice[]
-  activityLogs      ActivityLog[]
+  center               Center               @relation(fields: [centerId], references: [id])
+  parentChildren       ParentChild[]
+  attendanceRecords    AttendanceRecord[]
+  invoices             Invoice[]
+  activityLogs         ActivityLog[]
+  activityCompletions  ActivityCompletion[]
 
   @@index([centerId])
 }
@@ -277,10 +290,27 @@ model ActivityLog {
   date          DateTime @default(now()) @db.Date
   createdAt     DateTime @default(now())
 
-  center Center @relation(fields: [centerId], references: [id])
-  child  Child? @relation(fields: [childId], references: [id])
+  center      Center               @relation(fields: [centerId], references: [id])
+  child       Child?               @relation(fields: [childId], references: [id])
+  completions ActivityCompletion[]
 
   @@index([centerId, date])
+}
+
+model ActivityCompletion {
+  id         String   @id @default(cuid())
+  activityId String
+  childId    String
+  completed  Boolean  @default(false)
+  completedAt DateTime?
+  completedBy String?  // userId of caretaker who marked it
+  createdAt  DateTime @default(now())
+
+  activity ActivityLog @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  child    Child       @relation(fields: [childId], references: [id])
+
+  @@unique([activityId, childId])
+  @@index([childId])
 }
 
 // ─── Marketing ──────────────────────────────────────────────────────────────

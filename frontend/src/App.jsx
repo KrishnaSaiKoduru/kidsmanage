@@ -3,7 +3,7 @@ import LandingPage from './LandingPage'
 import Portal from './Portal'
 
 function App() {
-  const { user, session, loading, signOut } = useAuth()
+  const { user, session, loading, signOut, setUser } = useAuth()
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ function App() {
   }
 
   if (session && user) {
-    return <Portal onLogout={signOut} user={user} />
+    return <Portal onLogout={signOut} user={user} setUser={setUser} />
   }
 
   return <LandingPage />

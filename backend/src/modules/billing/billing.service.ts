@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { stripe } from '../../lib/stripe';
 import { resend } from '../../lib/resend';
 import { AppError } from '../../middleware/errorHandler';
+import { notifyAdmins, createNotification, sendNotificationEmail } from '../notifications/notifications.service';
 
 export async function listInvoices(centerId: string, filters?: {
   status?: string;
@@ -25,13 +26,18 @@ export async function createInvoice(centerId: string, data: {
   childId?: string;
   parentId?: string;
   amount: number;
-  tax?: number;
   dueDate: string;
   lineItems?: any;
   lateFee?: number;
   gracePeriodDays?: number;
 }) {
-  const tax = data.tax || 0;
+  // Auto-calculate tax from center's tax rate
+  const center = await prisma.center.findUnique({
+    where: { id: centerId },
+    select: { taxRate: true },
+  });
+  const taxRate = center?.taxRate ?? 0;
+  const tax = Math.round(data.amount * taxRate) / 100;
   const total = data.amount + tax;
 
   return prisma.invoice.create({
@@ -87,10 +93,23 @@ export async function sendInvoice(centerId: string, invoiceId: string) {
   });
 
   // Update status to SENT
-  return prisma.invoice.update({
+  const updated = await prisma.invoice.update({
     where: { id: invoiceId },
     data: { status: 'SENT' },
   });
+
+  // Create in-app notification for the parent
+  if (invoice.parentId) {
+    createNotification({
+      centerId,
+      userId: invoice.parentId,
+      title: 'New Invoice',
+      body: `You have a new invoice of $${invoice.total.toFixed(2)} due ${invoice.dueDate.toLocaleDateString()}.`,
+      link: '/billing',
+    });
+  }
+
+  return updated;
 }
 
 export async function createCheckoutSession(centerId: string, invoiceId: string) {
@@ -143,14 +162,49 @@ export async function handleStripeWebhook(event: any) {
       const invoiceId = session.metadata?.invoiceId;
 
       if (invoiceId) {
-        await prisma.invoice.update({
+        const paidInvoice = await prisma.invoice.update({
           where: { id: invoiceId },
           data: {
             status: 'PAID',
             paidAt: new Date(),
             stripePaymentId: session.payment_intent,
           },
+          include: {
+            parent: { select: { id: true, name: true, email: true } },
+            center: { select: { name: true } },
+          },
         });
+
+        // Notify admin that payment was received
+        if (paidInvoice.centerId) {
+          notifyAdmins(
+            paidInvoice.centerId,
+            'Payment Received',
+            `${paidInvoice.parent?.name || 'A parent'} paid $${paidInvoice.total.toFixed(2)}.`,
+            '/billing',
+          );
+        }
+
+        // Notify parent with confirmation
+        if (paidInvoice.parentId) {
+          createNotification({
+            centerId: paidInvoice.centerId,
+            userId: paidInvoice.parentId,
+            title: 'Payment Confirmed',
+            body: `Your payment of $${paidInvoice.total.toFixed(2)} has been received. Thank you!`,
+            link: '/billing',
+          });
+        }
+
+        // Send payment confirmation email to parent
+        if (paidInvoice.parent?.email) {
+          sendNotificationEmail({
+            to: paidInvoice.parent.email,
+            subject: `Payment Confirmed - $${paidInvoice.total.toFixed(2)}`,
+            heading: 'Payment Received',
+            body: `Hi ${paidInvoice.parent.name}, your payment of $${paidInvoice.total.toFixed(2)} to ${paidInvoice.center.name} has been confirmed.`,
+          });
+        }
       }
       break;
     }

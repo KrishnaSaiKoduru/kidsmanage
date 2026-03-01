@@ -27,7 +27,8 @@
       "Bash(npx tsc:*)",
       "Bash(npx vite:*)",
       "Bash(curl:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(netstat:*)"
     ]
   }
 }

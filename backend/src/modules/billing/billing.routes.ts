@@ -12,10 +12,16 @@ router.post('/stripe/webhook', raw({ type: 'application/json' }), billingControl
 // Protected routes
 router.use(authMiddleware, tenantGuard);
 
+// Invoice routes
 router.get('/invoices', billingController.listInvoices);
 router.post('/invoices', roleGuard('ADMIN'), billingController.createInvoice);
 router.post('/invoices/:id/send', roleGuard('ADMIN'), billingController.sendInvoice);
 router.post('/stripe/checkout', roleGuard('ADMIN', 'PARENT'), billingController.createCheckoutSession);
-router.get('/subscriptions', roleGuard('ADMIN'), billingController.getSubscriptionStatus);
+
+// Subscription routes
+router.get('/plans', billingController.getPlans);
+router.get('/subscription', roleGuard('ADMIN'), billingController.getSubscription);
+router.post('/subscription/checkout', roleGuard('ADMIN'), billingController.createSubscriptionCheckout);
+router.post('/subscription/portal', roleGuard('ADMIN'), billingController.createCustomerPortal);
 
 export default router;

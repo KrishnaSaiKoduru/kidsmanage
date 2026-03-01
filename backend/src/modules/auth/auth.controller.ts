@@ -33,7 +33,16 @@ const acceptInviteSchema = z.object({
 const updateProfileSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
-  avatarUrl: z.string().url().optional(),
+  avatarUrl: z.string().optional(), // allow base64 strings or URLs
+  address: z.string().optional(),
+  emergencyContactName: z.string().optional(),
+  emergencyContactPhone: z.string().optional(),
+  emergencyContactRelation: z.string().optional(),
+  employer: z.string().optional(),
+  authorizedPickups: z.string().optional(),
+  bio: z.string().optional(),
+  jobTitle: z.string().optional(),
+  certifications: z.string().optional(),
 });
 
 export async function register(req: Request, res: Response, next: NextFunction) {

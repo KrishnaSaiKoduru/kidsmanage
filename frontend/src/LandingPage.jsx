@@ -7,42 +7,48 @@ const tabContent = {
     title: 'Centralized Center Management',
     description: "Consolidate administrative tasks, reduce manual paperwork, and focus on what matters most—child development. Get a bird's-eye view of your entire operation from a single dashboard.",
     features: ['Staff Scheduling & Ratios', 'Comprehensive Child Profiles', 'Automated Compliance Reporting'],
-    colorTheme: 'blue'
+    colorTheme: 'blue',
+    image: '/images/landing_dashboard.png'
   },
   'billing': {
     label: 'Billing',
     title: 'Automated Billing & Invoicing',
     description: 'Say goodbye to disorganized billing and delayed payments. Automate your invoicing process and give parents secure, convenient ways to pay online.',
     features: ['Auto-generate Invoices', 'Secure Payment Options (Credit Card/ACH)', 'Late Fee Automation & Reminders'],
-    colorTheme: 'green'
+    colorTheme: 'green',
+    image: '/images/landing_learning.png'
   },
   'attendance': {
     label: 'Attendance',
     title: 'Real-Time Attendance Tracking',
     description: 'Ensure safety and accuracy with digital check-in systems. Monitor staff-to-child ratios in real-time to maintain compliance effortlessly.',
     features: ['PIN or QR-Based Check-in/out', 'Live Staff-to-Child Ratios', 'Daily Attendance Reports'],
-    colorTheme: 'purple'
+    colorTheme: 'purple',
+    image: '/images/landing_attendance.png'
   },
   'enrollment': {
     label: 'Enrollment',
     title: 'Stress-Free Digital Enrollment',
     description: 'Move away from paper packets. Streamline your onboarding process with customizable digital enrollment forms and waitlist management.',
     features: ['Custom Online Registration Forms', 'Waitlist & Lead Management', 'Digital Document Storage & e-Signatures'],
-    colorTheme: 'yellow'
+    colorTheme: 'yellow',
+    image: '/images/landing_enrollment.png'
   },
   'parent-engagement': {
     label: 'Parent Engagement',
     title: 'Enhanced Parent Engagement',
     description: 'Keep parents connected and informed. Share daily moments, developmental milestones, and important announcements instantly.',
     features: ['Instant Two-way Messaging', 'Daily Activity Logs (Meals, Naps, Lessons)', 'Photo & Video Sharing'],
-    colorTheme: 'pink'
+    colorTheme: 'pink',
+    image: '/images/landing_activities.png'
   },
   'marketing': {
     label: 'Marketing',
     title: 'Growth & Marketing Tools',
     description: 'Grow your business and reach more families online. Use our built-in tools to establish a strong online presence for your center.',
     features: ['AI-Powered Website Builder', 'SEO Optimization & Lead Gen', 'Marketing Analytics Dashboard'],
-    colorTheme: 'indigo'
+    colorTheme: 'indigo',
+    image: '/images/landing_marketing.png'
   }
 };
 
@@ -179,11 +185,13 @@ const LandingPage = () => {
               </ul>
             </div>
 
-            {/* Visual Placeholder Column */}
-            <div className={`w-full md:w-1/2 rounded-xl h-80 flex items-center justify-center border shadow-inner bg-${activeData.colorTheme}-50 border-${activeData.colorTheme}-100`}>
-              <span className={`text-${activeData.colorTheme}-500 font-medium text-lg`}>
-                [ {activeData.label} Illustration ]
-              </span>
+            {/* Feature Illustration */}
+            <div className={`w-full md:w-1/2 rounded-xl overflow-hidden border shadow-inner bg-${activeData.colorTheme}-50 border-${activeData.colorTheme}-100 h-80 flex items-center justify-center`}>
+              <img
+                src={activeData.image}
+                alt={`${activeData.label} illustration`}
+                className="w-full h-full object-contain p-4 transition-all duration-500"
+              />
             </div>
           </div>
 

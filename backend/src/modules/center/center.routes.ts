@@ -12,6 +12,7 @@ router.get('/', centerController.getCenter);
 router.patch('/', roleGuard('ADMIN'), centerController.updateCenter);
 router.get('/join-code', roleGuard('ADMIN'), centerController.getJoinCode);
 router.get('/staff', roleGuard('ADMIN'), centerController.listStaff);
+router.get('/parents', roleGuard('ADMIN'), centerController.listParents);
 router.patch('/staff/:id', roleGuard('ADMIN'), centerController.updateStaffRole);
 router.delete('/staff/:id', roleGuard('ADMIN'), centerController.deactivateStaff);
 

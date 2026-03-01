@@ -11,6 +11,10 @@ export default function BillingView({ user }) {
   const [statusFilter, setStatusFilter] = useState('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [children, setChildren] = useState([]);
+  const [parents, setParents] = useState([]);
+  const [taxRate, setTaxRate] = useState(0);
+  const [invoiceAmount, setInvoiceAmount] = useState('');
   const toast = useToast();
   const isParent = user?.role === 'PARENT';
   const isAdmin = user?.role === 'ADMIN';
@@ -22,7 +26,14 @@ export default function BillingView({ user }) {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchInvoices(); }, []);
+  useEffect(() => {
+    fetchInvoices();
+    if (isAdmin) {
+      api.get('/children').then(setChildren).catch(() => {});
+      api.get('/center/parents').then(setParents).catch(() => {});
+      api.get('/center').then((c) => setTaxRate(c.taxRate || 0)).catch(() => {});
+    }
+  }, []);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -31,13 +42,14 @@ export default function BillingView({ user }) {
     try {
       await api.post('/billing/invoices', {
         childId: fd.get('childId') || undefined,
+        parentId: fd.get('parentId') || undefined,
         amount: parseFloat(fd.get('amount')),
-        tax: parseFloat(fd.get('tax') || '0'),
         dueDate: fd.get('dueDate'),
         lineItems: [{ description: fd.get('description'), amount: parseFloat(fd.get('amount')) }],
       });
       toast.success('Invoice created');
       setShowCreateModal(false);
+      setInvoiceAmount('');
       fetchInvoices();
     } catch (err) {
       toast.error(err.message);
@@ -137,6 +149,7 @@ export default function BillingView({ user }) {
               <thead>
                 <tr className="bg-gray-50/50 dark:bg-gray-700/30 text-gray-500 dark:text-gray-400 text-xs uppercase tracking-wider border-b border-gray-100 dark:border-gray-700">
                   <th className="p-4 font-semibold">Invoice</th>
+                  <th className="p-4 font-semibold">Parent</th>
                   <th className="p-4 font-semibold">Child</th>
                   <th className="p-4 font-semibold">Due Date</th>
                   <th className="p-4 font-semibold">Amount</th>
@@ -148,6 +161,7 @@ export default function BillingView({ user }) {
                 {filtered.map((inv) => (
                   <tr key={inv.id} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50/50 dark:hover:bg-gray-700/30 transition-colors">
                     <td className="p-4 font-medium text-gray-800 dark:text-gray-200 text-sm">{inv.id.slice(0, 12)}...</td>
+                    <td className="p-4 text-gray-600 dark:text-gray-400 text-sm">{inv.parent?.name || '-'}</td>
                     <td className="p-4 text-gray-600 dark:text-gray-400 text-sm">{inv.child ? `${inv.child.firstName} ${inv.child.lastName}` : '-'}</td>
                     <td className="p-4 text-gray-500 dark:text-gray-400 text-sm">{new Date(inv.dueDate).toLocaleDateString()}</td>
                     <td className="p-4 font-bold text-gray-800 dark:text-gray-200">${inv.total.toFixed(2)}</td>
@@ -185,20 +199,50 @@ export default function BillingView({ user }) {
               <button onClick={() => setShowCreateModal(false)} className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-400"><X size={18} /></button>
             </div>
             <form onSubmit={handleCreate} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Parent</label>
+                  <select name="parentId" className={inputCls}>
+                    <option value="">-- Select Parent --</option>
+                    {parents.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Child</label>
+                  <select name="childId" className={inputCls}>
+                    <option value="">-- Select Child --</option>
+                    {children.map((c) => (
+                      <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Description</label>
                 <input name="description" required className={inputCls} placeholder="e.g. February Tuition" />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Amount ($)</label>
-                  <input name="amount" type="number" step="0.01" required className={inputCls} placeholder="0.00" />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Tax ($)</label>
-                  <input name="tax" type="number" step="0.01" className={inputCls} placeholder="0.00" />
-                </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Amount ($)</label>
+                <input name="amount" type="number" step="0.01" required className={inputCls} placeholder="0.00" value={invoiceAmount} onChange={(e) => setInvoiceAmount(e.target.value)} />
               </div>
+              {taxRate > 0 && invoiceAmount && (
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl px-4 py-3 text-sm space-y-1">
+                  <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                    <span>Subtotal</span>
+                    <span>${parseFloat(invoiceAmount).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                    <span>Tax ({taxRate}%)</span>
+                    <span>${(parseFloat(invoiceAmount) * taxRate / 100).toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-gray-800 dark:text-gray-200 border-t border-gray-200 dark:border-gray-600 pt-1">
+                    <span>Total</span>
+                    <span>${(parseFloat(invoiceAmount) + parseFloat(invoiceAmount) * taxRate / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Due Date</label>
                 <input name="dueDate" type="date" required className={inputCls} />

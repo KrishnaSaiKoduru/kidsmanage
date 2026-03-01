@@ -17,6 +17,7 @@ import dashboardRoutes from './modules/dashboard/dashboard.routes';
 import activitiesRoutes from './modules/activities/activities.routes';
 import messagesRoutes from './modules/messages/messages.routes';
 import enrollmentRoutes from './modules/enrollment/enrollment.routes';
+import notificationRoutes from './modules/notifications/notifications.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,7 +36,7 @@ app.use((req, res, next) => {
   if (req.originalUrl === '/api/billing/stripe/webhook') {
     next();
   } else {
-    express.json()(req, res, next);
+    express.json({ limit: '10mb' })(req, res, next); // increased limit for base64 image uploads
   }
 });
 
@@ -56,6 +57,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/activities', activitiesRoutes);
 app.use('/api/messages', messagesRoutes);
 app.use('/api/enrollment', enrollmentRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Global error handler
 app.use(errorHandler);

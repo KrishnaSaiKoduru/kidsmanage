@@ -43,6 +43,15 @@ export async function listStaff(req: Request, res: Response, next: NextFunction)
   }
 }
 
+export async function listParents(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await centerService.listParents(req.user!.centerId!);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function updateStaffRole(req: Request, res: Response, next: NextFunction) {
   try {
     const { role } = updateStaffRoleSchema.parse(req.body);

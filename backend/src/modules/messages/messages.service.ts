@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/errorHandler';
+import { notifyUsers } from '../notifications/notifications.service';
 
 export async function getCenterUsers(centerId: string, currentUserId: string) {
   return prisma.user.findMany({
@@ -221,6 +222,23 @@ export async function sendMessage(centerId: string, conversationId: string, send
     where: { id: conversationId },
     data: { updatedAt: new Date() },
   });
+
+  // Notify other participants about the new message
+  const participants = await prisma.conversationParticipant.findMany({
+    where: { conversationId, userId: { not: senderId } },
+    select: { userId: true },
+  });
+  const recipientIds = participants.map((p) => p.userId);
+  if (recipientIds.length > 0) {
+    const preview = data.content.length > 60 ? data.content.slice(0, 60) + '...' : data.content;
+    notifyUsers(
+      centerId,
+      recipientIds,
+      `New Message from ${message.sender.name}`,
+      preview,
+      '/messages',
+    );
+  }
 
   return message;
 }

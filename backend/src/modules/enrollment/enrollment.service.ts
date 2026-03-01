@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/errorHandler';
+import { notifyAdmins, sendNotificationEmail } from '../notifications/notifications.service';
 
 export async function listApplications(centerId: string) {
   return prisma.enrollmentApplication.findMany({
@@ -16,7 +17,7 @@ export async function createApplication(centerId: string, data: {
   dateOfBirth: string;
   notes?: string;
 }) {
-  return prisma.enrollmentApplication.create({
+  const application = await prisma.enrollmentApplication.create({
     data: {
       centerId,
       childName: data.childName,
@@ -27,6 +28,24 @@ export async function createApplication(centerId: string, data: {
       notes: data.notes,
     },
   });
+
+  // Notify admins about new enrollment application
+  notifyAdmins(
+    centerId,
+    'New Enrollment Application',
+    `${data.parentName} submitted an application for ${data.childName}.`,
+    '/enrollment',
+  );
+
+  // Send confirmation email to parent
+  sendNotificationEmail({
+    to: data.parentEmail,
+    subject: 'Enrollment Application Received',
+    heading: 'Application Received',
+    body: `Hi ${data.parentName}, we've received your enrollment application for ${data.childName}. We'll review it and get back to you soon.`,
+  });
+
+  return application;
 }
 
 export async function approveApplication(centerId: string, id: string) {
@@ -58,6 +77,16 @@ export async function approveApplication(centerId: string, id: string) {
       },
     }),
   ]);
+
+  // Send approval email to parent
+  sendNotificationEmail({
+    to: application.parentEmail,
+    subject: 'Enrollment Approved!',
+    heading: 'Your Child Has Been Enrolled',
+    body: `Great news, ${application.parentName}! The enrollment application for ${application.childName} has been approved. Welcome to our center!`,
+    ctaText: 'View Details',
+    ctaUrl: `${process.env.FRONTEND_URL}`,
+  });
 
   return { application: { ...application, status: 'APPROVED' }, child };
 }

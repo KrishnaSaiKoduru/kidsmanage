@@ -2,6 +2,7 @@ import { prisma } from '../../lib/prisma';
 import { supabaseAdmin } from '../../lib/supabase';
 import { resend } from '../../lib/resend';
 import { AppError } from '../../middleware/errorHandler';
+import { notifyAdmins } from '../notifications/notifications.service';
 
 function generateJoinCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -201,6 +202,16 @@ export async function acceptInvite(data: {
     where: { id: user.id },
     data: { status: 'ACTIVE' },
   });
+
+  // Notify admins that the invite was accepted
+  if (user.centerId) {
+    notifyAdmins(
+      user.centerId,
+      'Invite Accepted',
+      `${user.name} (${user.role}) has accepted their invitation and joined the center.`,
+      '/settings',
+    );
+  }
 
   return updated;
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building2, Users, User, Save, Plus, UserX, Shield, Copy, Key } from 'lucide-react';
+import { Building2, Users, User, Save, Plus, UserX, Shield, Copy, Key, CreditCard, Check, Zap, Crown, Sparkles, ExternalLink } from 'lucide-react';
 import { api } from '../lib/api';
 import { useToast } from '../context/ToastContext';
 import Spinner from './ui/Spinner';
@@ -7,6 +7,7 @@ import EmptyState from './ui/EmptyState';
 
 const TABS = [
   { id: 'center', label: 'Center Info', icon: Building2 },
+  { id: 'plan', label: 'Plan & Billing', icon: CreditCard },
   { id: 'staff', label: 'Staff', icon: Users },
   { id: 'account', label: 'My Account', icon: User },
 ];
@@ -33,8 +34,225 @@ export default function SettingsView({ user }) {
       </div>
 
       {tab === 'center' && <CenterTab user={user} />}
+      {tab === 'plan' && <PlanTab />}
       {tab === 'staff' && <StaffTab />}
       {tab === 'account' && <AccountTab user={user} />}
+    </div>
+  );
+}
+
+const PLAN_ICONS = { FREE: Zap, STARTER: Sparkles, PROFESSIONAL: Crown, ENTERPRISE: Shield };
+const PLAN_COLORS = {
+  FREE: { border: 'border-gray-200 dark:border-gray-700', badge: 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300', gradient: 'from-gray-500 to-gray-600' },
+  STARTER: { border: 'border-blue-200 dark:border-blue-800', badge: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300', gradient: 'from-blue-500 to-blue-600' },
+  PROFESSIONAL: { border: 'border-purple-200 dark:border-purple-800', badge: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300', gradient: 'from-purple-500 to-purple-600' },
+  ENTERPRISE: { border: 'border-amber-200 dark:border-amber-800', badge: 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300', gradient: 'from-amber-500 to-amber-600' },
+};
+
+function PlanTab() {
+  const [plans, setPlans] = useState([]);
+  const [subscription, setSubscription] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [upgrading, setUpgrading] = useState(null);
+  const toast = useToast();
+
+  useEffect(() => {
+    Promise.all([
+      api.get('/billing/plans'),
+      api.get('/billing/subscription'),
+    ])
+      .then(([plansData, subData]) => {
+        setPlans(plansData);
+        setSubscription(subData);
+      })
+      .catch((err) => toast.error(err.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleUpgrade = async (tier) => {
+    if (tier === 'FREE') return;
+    setUpgrading(tier);
+    try {
+      const result = await api.post('/billing/subscription/checkout', { tier });
+      if (result.type === 'checkout' && result.url) {
+        window.location.href = result.url;
+      } else if (result.type === 'updated') {
+        toast.success('Plan updated successfully!');
+        // Refresh subscription data
+        const subData = await api.get('/billing/subscription');
+        setSubscription(subData);
+      }
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setUpgrading(null);
+    }
+  };
+
+  const handleManage = async () => {
+    try {
+      const { url } = await api.post('/billing/subscription/portal');
+      if (url) window.location.href = url;
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  if (loading) return <Spinner />;
+
+  const currentTier = subscription?.planTier || 'FREE';
+  const tierOrder = ['FREE', 'STARTER', 'PROFESSIONAL', 'ENTERPRISE'];
+  const currentIndex = tierOrder.indexOf(currentTier);
+
+  return (
+    <div className="space-y-6">
+      {/* Current Plan Summary */}
+      <div className={`bg-gradient-to-br ${PLAN_COLORS[currentTier]?.gradient || 'from-gray-500 to-gray-600'} rounded-2xl shadow-md p-6 text-white`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium opacity-80">Current Plan</p>
+            <h3 className="text-2xl font-bold mt-1">{subscription?.planName || 'Free'}</h3>
+            <p className="text-sm opacity-80 mt-2">
+              {subscription?.enrolledChildren || 0} children enrolled | {subscription?.totalUsers || 0} users
+            </p>
+            {subscription?.subscription && (
+              <p className="text-xs opacity-70 mt-1">
+                {subscription.subscription.cancelAtPeriodEnd
+                  ? `Cancels on ${new Date(subscription.subscription.currentPeriodEnd).toLocaleDateString()}`
+                  : `Renews on ${new Date(subscription.subscription.currentPeriodEnd).toLocaleDateString()}`}
+              </p>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="text-3xl font-bold">${subscription?.priceInDollars || 0}</p>
+            <p className="text-sm opacity-80">/month</p>
+            {subscription?.subscription && (
+              <button onClick={handleManage}
+                className="mt-3 flex items-center gap-1.5 text-xs font-semibold bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors">
+                <ExternalLink size={12} /> Manage Subscription
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Plan Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {plans.map((plan) => {
+          const isCurrentPlan = plan.tier === currentTier;
+          const planIndex = tierOrder.indexOf(plan.tier);
+          const isDowngrade = planIndex < currentIndex;
+          const isUpgrade = planIndex > currentIndex;
+          const colors = PLAN_COLORS[plan.tier] || PLAN_COLORS.FREE;
+          const PlanIcon = PLAN_ICONS[plan.tier] || Zap;
+
+          return (
+            <div key={plan.tier}
+              className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 p-5 transition-all ${
+                isCurrentPlan ? `${colors.border} ring-2 ring-offset-2 ring-blue-500/30 dark:ring-offset-gray-900` : 'border-gray-100 dark:border-gray-700'
+              }`}>
+              {/* Current Plan Badge */}
+              {isCurrentPlan && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                  <span className="bg-blue-600 text-white text-[10px] font-bold px-3 py-1 rounded-full shadow-sm">CURRENT PLAN</span>
+                </div>
+              )}
+
+              {/* Plan Header */}
+              <div className="flex items-center gap-2 mb-3 mt-1">
+                <div className={`p-2 rounded-xl ${colors.badge}`}>
+                  <PlanIcon size={18} />
+                </div>
+                <h4 className="font-bold text-gray-800 dark:text-gray-100">{plan.name}</h4>
+              </div>
+
+              {/* Price */}
+              <div className="mb-4">
+                <span className="text-3xl font-bold text-gray-800 dark:text-gray-100">${plan.priceInDollars}</span>
+                {plan.price > 0 && <span className="text-sm text-gray-500 dark:text-gray-400">/mo</span>}
+              </div>
+
+              {/* Limits */}
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-3 space-y-1">
+                <p>{plan.maxChildren === -1 ? 'Unlimited' : plan.maxChildren} children</p>
+                <p>{plan.maxStaff === -1 ? 'Unlimited' : plan.maxStaff} staff</p>
+              </div>
+
+              {/* Features */}
+              <ul className="space-y-2 mb-5">
+                {plan.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    <Check size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* Action Button */}
+              {isCurrentPlan ? (
+                <button disabled className="w-full py-2.5 rounded-xl text-sm font-bold bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed">
+                  Current Plan
+                </button>
+              ) : plan.tier === 'FREE' ? (
+                <button disabled className="w-full py-2.5 rounded-xl text-sm font-bold bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed">
+                  {isDowngrade ? 'Cancel to downgrade' : 'Free'}
+                </button>
+              ) : (
+                <button onClick={() => handleUpgrade(plan.tier)} disabled={upgrading === plan.tier}
+                  className={`w-full py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm active:scale-95 disabled:opacity-50 ${
+                    isUpgrade
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-300 dark:hover:bg-gray-500'
+                  }`}>
+                  {upgrading === plan.tier ? 'Processing...' : isUpgrade ? 'Upgrade' : 'Switch'}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Usage Info */}
+      {subscription && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
+          <h4 className="font-bold text-gray-800 dark:text-gray-100 mb-3">Usage</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <UsageBar
+              label="Children"
+              used={subscription.enrolledChildren}
+              max={subscription.maxChildren}
+            />
+            <UsageBar
+              label="Staff"
+              used={subscription.totalUsers}
+              max={subscription.maxStaff}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UsageBar({ label, used, max }) {
+  const isUnlimited = max === -1;
+  const percentage = isUnlimited ? Math.min((used / 100) * 100, 100) : Math.min((used / max) * 100, 100);
+  const isNearLimit = !isUnlimited && percentage >= 80;
+
+  return (
+    <div>
+      <div className="flex justify-between text-sm mb-1.5">
+        <span className="font-medium text-gray-700 dark:text-gray-300">{label}</span>
+        <span className={`font-bold ${isNearLimit ? 'text-amber-600' : 'text-gray-500 dark:text-gray-400'}`}>
+          {used} / {isUnlimited ? '∞' : max}
+        </span>
+      </div>
+      <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${isNearLimit ? 'bg-amber-500' : 'bg-blue-500'}`}
+          style={{ width: `${isUnlimited ? Math.min(used, 30) : percentage}%` }}
+        />
+      </div>
     </div>
   );
 }

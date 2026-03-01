@@ -76,6 +76,18 @@ export async function listStaff(centerId: string) {
   });
 }
 
+export async function listParents(centerId: string) {
+  return prisma.user.findMany({
+    where: {
+      centerId,
+      role: 'PARENT',
+      status: 'ACTIVE',
+    },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: 'asc' },
+  });
+}
+
 export async function updateStaffRole(centerId: string, staffId: string, role: string) {
   const user = await prisma.user.findFirst({
     where: { id: staffId, centerId },

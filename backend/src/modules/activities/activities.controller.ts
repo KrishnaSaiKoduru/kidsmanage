@@ -56,3 +56,46 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     next(err);
   }
 }
+
+export async function toggleCompletion(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { childId } = req.body;
+    if (!childId) return res.status(400).json({ error: 'childId is required' });
+    const result = await activitiesService.toggleCompletion(
+      req.user!.centerId!,
+      req.params.id as string,
+      childId as string,
+      req.user!.id! as string,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function markAllDone(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await activitiesService.markAllDone(
+      req.user!.centerId!,
+      req.params.id as string,
+      req.user!.id! as string,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listChildActivities(req: Request, res: Response, next: NextFunction) {
+  try {
+    const date = req.query.date as string | undefined;
+    const result = await activitiesService.listChildActivities(
+      req.user!.centerId!,
+      req.params.childId as string,
+      date,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}

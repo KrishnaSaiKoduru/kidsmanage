@@ -2,12 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { stripe } from '../../lib/stripe';
 import * as billingService from './billing.service';
+import * as subscriptionService from './subscription.service';
 
 const createInvoiceSchema = z.object({
   childId: z.string().optional(),
   parentId: z.string().optional(),
   amount: z.number().positive(),
-  tax: z.number().min(0).optional(),
   dueDate: z.string(),
   lineItems: z.any().optional(),
   lateFee: z.number().min(0).optional(),
@@ -71,16 +71,57 @@ export async function stripeWebhook(req: Request, res: Response, next: NextFunct
       process.env.STRIPE_WEBHOOK_SECRET!
     );
 
+    // Route to appropriate handler
     await billingService.handleStripeWebhook(event);
+    await subscriptionService.handleSubscriptionWebhook(event);
+
     res.json({ received: true });
   } catch (err) {
     next(err);
   }
 }
 
-export async function getSubscriptionStatus(req: Request, res: Response, next: NextFunction) {
+// ─── Subscription Endpoints ─────────────────────────────────────────────────
+
+export async function getPlans(_req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await billingService.getSubscriptionStatus(req.user!.centerId!);
+    const plans = await subscriptionService.getPlans();
+    res.json(plans);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getSubscription(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await subscriptionService.getSubscription(req.user!.centerId!);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createSubscriptionCheckout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { tier } = req.body;
+    if (!tier) {
+      res.status(400).json({ error: 'tier is required' });
+      return;
+    }
+    const result = await subscriptionService.createSubscriptionCheckout(
+      req.user!.centerId!,
+      tier,
+      req.user!.email,
+    );
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function createCustomerPortal(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await subscriptionService.createCustomerPortal(req.user!.centerId!);
     res.json(result);
   } catch (err) {
     next(err);
