@@ -57,7 +57,7 @@ const LandingPage = () => {
   const [activeTab, setActiveTab] = useState('center-management');
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' or 'signup'
-  const [authForm, setAuthForm] = useState({ email: '', password: '', centerName: '', directorName: '', phone: '', role: 'ADMIN', joinCode: '' });
+  const [authForm, setAuthForm] = useState({ email: '', password: '', centerName: '', directorName: '', phone: '', role: 'PARENT', joinCode: '' });
   const [authError, setAuthError] = useState('');
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -74,14 +74,6 @@ const LandingPage = () => {
     try {
       if (authMode === 'login') {
         await signIn({ email: authForm.email, password: authForm.password });
-      } else if (authForm.role === 'ADMIN') {
-        await signUp({
-          email: authForm.email,
-          password: authForm.password,
-          centerName: authForm.centerName,
-          directorName: authForm.directorName,
-          phone: authForm.phone,
-        });
       } else {
         await signUpUser({
           name: authForm.directorName,
@@ -230,21 +222,10 @@ const LandingPage = () => {
                       onChange={(e) => setAuthForm({ ...authForm, role: e.target.value })}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
                     >
-                      <option value="ADMIN">Center Admin</option>
                       <option value="PARENT">Parent</option>
                       <option value="CARETAKER">Caretaker</option>
                     </select>
                   </div>
-                  {authForm.role === 'ADMIN' && (
-                    <input
-                      type="text"
-                      placeholder="Center Name"
-                      required
-                      value={authForm.centerName}
-                      onChange={(e) => setAuthForm({ ...authForm, centerName: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    />
-                  )}
                   <input
                     type="text"
                     placeholder="Your Full Name"
@@ -253,16 +234,14 @@ const LandingPage = () => {
                     onChange={(e) => setAuthForm({ ...authForm, directorName: e.target.value })}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                   />
-                  {authForm.role !== 'ADMIN' && (
-                    <input
-                      type="text"
-                      placeholder="Center Join Code"
-                      required
-                      value={authForm.joinCode}
-                      onChange={(e) => setAuthForm({ ...authForm, joinCode: e.target.value.toUpperCase() })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none tracking-widest font-mono"
-                    />
-                  )}
+                  <input
+                    type="text"
+                    placeholder="Center Join Code"
+                    required
+                    value={authForm.joinCode}
+                    onChange={(e) => setAuthForm({ ...authForm, joinCode: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none tracking-widest font-mono"
+                  />
                 </>
               )}
               <input
