@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { generalLimiter } from './middleware/rateLimiter';
 import { sanitizeMiddleware } from './middleware/sanitize';
 import { errorHandler } from './middleware/errorHandler';
+import { prisma } from './lib/prisma';
 
 import authRoutes from './modules/auth/auth.routes';
 import centerRoutes from './modules/center/center.routes';
@@ -57,8 +58,20 @@ app.use((req, res, next) => {
 app.use(sanitizeMiddleware);
 
 // Health check
-app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+app.get('/api/health', async (_req, res) => {
+  let dbStatus = 'unknown';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    dbStatus = 'connected';
+  } catch (err: any) {
+    dbStatus = `error: ${err.message}`;
+  }
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    database: dbStatus,
+    hasDbUrl: !!process.env.DATABASE_URL,
+  });
 });
 
 // API routes
@@ -76,8 +89,17 @@ app.use('/api/notifications', notificationRoutes);
 // Global error handler
 app.use(errorHandler);
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`KidsManage API running on http://localhost:${PORT}`);
   console.log(`NODE_ENV: ${process.env.NODE_ENV || '(not set)'}`);
+  console.log(`DATABASE_URL: ${process.env.DATABASE_URL ? '***set***' : '*** NOT SET ***'}`);
   console.log(`CORS allowed origins: ${[process.env.FRONTEND_URL, 'http://localhost:5173', 'http://localhost:4173'].filter(Boolean).join(', ')}`);
+
+  // Verify database connectivity at startup
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    console.log('Database connection: OK');
+  } catch (err) {
+    console.error('Database connection: FAILED', err);
+  }
 });
