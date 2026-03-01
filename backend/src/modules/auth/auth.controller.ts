@@ -30,6 +30,12 @@ const acceptInviteSchema = z.object({
   password: z.string().min(8),
 });
 
+const completeOAuthSchema = z.object({
+  role: z.enum(['PARENT', 'CARETAKER']),
+  joinCode: z.string().min(1),
+  name: z.string().min(1),
+});
+
 const updateProfileSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().optional(),
@@ -84,6 +90,21 @@ export async function acceptInvite(req: Request, res: Response, next: NextFuncti
     const data = acceptInviteSchema.parse(req.body);
     const result = await authService.acceptInvite(data);
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function completeOAuth(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = completeOAuthSchema.parse(req.body);
+    const supabaseUser = (req as any).supabaseUser;
+    const result = await authService.completeOAuthRegistration({
+      supabaseId: supabaseUser.id,
+      email: supabaseUser.email,
+      ...data,
+    });
+    res.status(201).json(result);
   } catch (err) {
     next(err);
   }

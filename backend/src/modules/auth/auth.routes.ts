@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authMiddleware } from '../../middleware/auth';
+import { authMiddleware, supabaseAuthMiddleware } from '../../middleware/auth';
 import { tenantGuard } from '../../middleware/tenantGuard';
 import { roleGuard } from '../../middleware/roleGuard';
 import { authLimiter } from '../../middleware/rateLimiter';
@@ -11,6 +11,9 @@ const router = Router();
 router.post('/register', authLimiter, authController.register);
 router.post('/register-user', authLimiter, authController.registerUser);
 router.post('/accept-invite', authLimiter, authController.acceptInvite);
+
+// OAuth completion (needs Supabase token but DB user may not exist yet)
+router.post('/complete-oauth', authLimiter, supabaseAuthMiddleware, authController.completeOAuth);
 
 // Protected routes
 router.get('/me', authMiddleware, authController.getMe);

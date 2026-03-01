@@ -216,6 +216,55 @@ export async function acceptInvite(data: {
   return updated;
 }
 
+export async function completeOAuthRegistration(data: {
+  supabaseId: string;
+  email: string;
+  name: string;
+  role: 'PARENT' | 'CARETAKER';
+  joinCode: string;
+}) {
+  // Look up center by join code
+  const center = await prisma.center.findUnique({
+    where: { joinCode: data.joinCode.toUpperCase() },
+  });
+
+  if (!center) {
+    throw new AppError(400, 'Invalid join code');
+  }
+
+  // Check if user already exists in DB
+  const existing = await prisma.user.findUnique({
+    where: { supabaseId: data.supabaseId },
+  });
+
+  if (existing) {
+    throw new AppError(400, 'User already registered');
+  }
+
+  // Also check by email
+  const existingByEmail = await prisma.user.findUnique({
+    where: { email: data.email },
+  });
+
+  if (existingByEmail) {
+    throw new AppError(400, 'User with this email already exists');
+  }
+
+  // Create user record linked to the Supabase OAuth user
+  const user = await prisma.user.create({
+    data: {
+      supabaseId: data.supabaseId,
+      centerId: center.id,
+      name: data.name,
+      email: data.email,
+      role: data.role,
+      status: 'ACTIVE',
+    },
+  });
+
+  return { user, center };
+}
+
 export async function getCurrentUser(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },

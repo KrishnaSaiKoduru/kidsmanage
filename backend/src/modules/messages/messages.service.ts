@@ -231,13 +231,18 @@ export async function sendMessage(centerId: string, conversationId: string, send
   const recipientIds = participants.map((p) => p.userId);
   if (recipientIds.length > 0) {
     const preview = data.content.length > 60 ? data.content.slice(0, 60) + '...' : data.content;
-    notifyUsers(
-      centerId,
-      recipientIds,
-      `New Message from ${message.sender.name}`,
-      preview,
-      '/messages',
-    );
+    try {
+      await notifyUsers(
+        centerId,
+        recipientIds,
+        `New Message from ${message.sender.name}`,
+        preview,
+        '/messages',
+      );
+    } catch (err) {
+      console.error('[Messages] Failed to notify users:', err);
+      // Don't throw — notification failure shouldn't block message delivery
+    }
   }
 
   return message;

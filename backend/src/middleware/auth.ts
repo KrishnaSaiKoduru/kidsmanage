@@ -19,6 +19,40 @@ declare global {
   }
 }
 
+/**
+ * Lightweight auth middleware that only validates the Supabase token.
+ * Sets req.supabaseUser with { id, email } from the token.
+ * Used for routes where the DB user may not exist yet (e.g., OAuth registration).
+ */
+export async function supabaseAuthMiddleware(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Missing or invalid authorization header' });
+    return;
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    const { data: { user: supabaseUser }, error } = await supabaseAdmin.auth.getUser(token);
+
+    if (error || !supabaseUser) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    (req as any).supabaseUser = {
+      id: supabaseUser.id,
+      email: supabaseUser.email,
+    };
+
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function authMiddleware(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
 

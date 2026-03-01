@@ -4,6 +4,8 @@ import { api } from '../lib/api';
 
 const AuthContext = createContext(null);
 
+const OAUTH_STORAGE_KEY = 'kidsmanage_oauth_pending';
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
@@ -14,7 +16,7 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       if (s) {
-        fetchProfile();
+        handleSessionReady(s);
       } else {
         setLoading(false);
       }
@@ -24,7 +26,7 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s) {
-        fetchProfile();
+        handleSessionReady(s);
       } else {
         setUser(null);
         setLoading(false);
@@ -34,15 +36,40 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  async function handleSessionReady(s) {
+    setLoading(true);
+    try {
+      const profile = await fetchProfile();
+      if (profile) return; // already registered, done
+
+      // No DB user — check if there's pending OAuth registration data
+      const pending = localStorage.getItem(OAUTH_STORAGE_KEY);
+      if (pending) {
+        const { role, joinCode, name } = JSON.parse(pending);
+        await api.post('/auth/complete-oauth', { role, joinCode, name });
+        localStorage.removeItem(OAUTH_STORAGE_KEY);
+        // Retry fetching profile after completing registration
+        await fetchProfile();
+      }
+    } catch (err) {
+      console.error('[Auth] Session ready handler failed:', err);
+      // Clear stale OAuth data on failure so user isn't stuck
+      localStorage.removeItem(OAUTH_STORAGE_KEY);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function fetchProfile() {
     try {
       const profile = await api.get('/auth/me');
       setUser(profile);
-    } catch {
-      // User might not exist in DB yet (e.g., just signed up)
+      return profile;
+    } catch (err) {
+      console.error('[Auth] Failed to fetch profile:', err.message);
       setUser(null);
-    } finally {
-      setLoading(false);
+      return null;
     }
   }
 
@@ -59,6 +86,9 @@ export function AuthProvider({ children }) {
     // Sign in with Supabase to get session
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+
+    // Explicitly fetch profile instead of relying on listener race
+    await fetchProfile();
 
     return result;
   }
@@ -78,23 +108,45 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
 
+    // Explicitly fetch profile instead of relying on listener race
+    await fetchProfile();
+
     return result;
   }
 
   async function signIn({ email, password }) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
+
+    // Explicitly fetch profile to avoid race with onAuthStateChange listener
+    await fetchProfile();
+  }
+
+  async function signInWithGoogle({ role, joinCode, name } = {}) {
+    // If signing up (role + joinCode provided), store in localStorage for post-redirect
+    if (role && joinCode) {
+      localStorage.setItem(OAUTH_STORAGE_KEY, JSON.stringify({ role, joinCode, name: name || '' }));
+    }
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin,
+      },
+    });
+    if (error) throw error;
   }
 
   async function signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
+    localStorage.removeItem(OAUTH_STORAGE_KEY);
     setUser(null);
     setSession(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, setUser, session, loading, signUp, signUpUser, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, setUser, session, loading, signUp, signUpUser, signIn, signInWithGoogle, signOut }}>
       {children}
     </AuthContext.Provider>
   );
