@@ -44,22 +44,47 @@ export default function MessagesView() {
 
   useEffect(() => { fetchConversations(); }, []);
 
+  // Poll conversations and messages, pausing when tab is hidden
   useEffect(() => {
-    const interval = setInterval(() => fetchConversations(false), 10000);
-    return () => clearInterval(interval);
-  }, []);
+    let convoInterval = null;
+    let msgInterval = null;
 
-  useEffect(() => {
-    if (!activeId) return;
-    const interval = setInterval(() => {
-      api.get(`/messages/conversations/${activeId}/messages`).then((msgs) => {
-        setMessages(msgs);
-        if (msgs.some((m) => m.isUnread)) {
-          markAsRead(activeId);
-        }
-      }).catch(() => {});
-    }, 10000);
-    return () => clearInterval(interval);
+    const startPolling = () => {
+      convoInterval = setInterval(() => fetchConversations(false), 10000);
+      msgInterval = setInterval(() => {
+        if (!activeId) return;
+        api.get(`/messages/conversations/${activeId}/messages`).then((msgs) => {
+          setMessages(msgs);
+          if (msgs.some((m) => m.isUnread)) {
+            markAsRead(activeId);
+          }
+        }).catch(() => {});
+      }, 10000);
+    };
+
+    const stopPolling = () => {
+      if (convoInterval) clearInterval(convoInterval);
+      if (msgInterval) clearInterval(msgInterval);
+      convoInterval = null;
+      msgInterval = null;
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        fetchConversations(false);
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    };
+
+    if (document.visibilityState === 'visible') startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, [activeId]);
 
   const loadMessages = async (convId) => {
@@ -75,7 +100,11 @@ export default function MessagesView() {
   };
 
   const markAsRead = (convId) => {
-    api.put(`/messages/conversations/${convId}/read`).then(() => fetchConversations()).catch(() => {});
+    // Optimistic update: set unreadCount to 0 locally instead of refetching
+    setConversations((prev) =>
+      prev.map((c) => c.id === convId ? { ...c, unreadCount: 0 } : c)
+    );
+    api.put(`/messages/conversations/${convId}/read`).catch(() => {});
   };
 
   const openConvo = (id) => {
@@ -87,12 +116,27 @@ export default function MessagesView() {
 
   const sendMessage = async () => {
     if (!inputText.trim() || !activeId) return;
+    const content = inputText;
+    setInputText('');
+    // Optimistic update: append message to local state immediately
+    const optimisticMsg = {
+      id: `optimistic-${Date.now()}`,
+      conversationId: activeId,
+      content,
+      type: 'text',
+      createdAt: new Date().toISOString(),
+      sender: { id: user?.id, name: user?.name, role: user?.role },
+      isUnread: false,
+    };
+    setMessages((prev) => [...prev, optimisticMsg]);
     try {
-      await api.post(`/messages/conversations/${activeId}/messages`, { content: inputText });
-      setInputText('');
-      loadMessages(activeId);
-      fetchConversations();
+      await api.post(`/messages/conversations/${activeId}/messages`, { content });
+      // Refresh conversations to update last message preview
+      fetchConversations(false);
     } catch (err) {
+      // Remove optimistic message on failure
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticMsg.id));
+      setInputText(content);
       toast.error(err.message);
     }
   };
@@ -128,7 +172,8 @@ export default function MessagesView() {
       }
       const conv = await api.post('/messages/conversations', payload);
       setShowNewModal(false);
-      fetchConversations();
+      // Add new conversation to local state and open it (openConvo handles markAsRead)
+      setConversations((prev) => [{ ...conv, lastMessage: null, unreadCount: 0 }, ...prev]);
       openConvo(conv.id);
     } catch (err) {
       toast.error(err.message);

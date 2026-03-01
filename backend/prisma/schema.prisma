@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -261,6 +262,7 @@ model Message {
   sender       User         @relation("MessageSender", fields: [senderId], references: [id])
 
   @@index([conversationId])
+  @@index([conversationId, createdAt, senderId])
 }
 
 model ConversationParticipant {

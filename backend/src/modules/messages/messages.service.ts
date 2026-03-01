@@ -37,33 +37,40 @@ export async function listConversations(centerId: string, userId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  // Calculate unread count for each conversation
-  const results = await Promise.all(
-    conversations.map(async (c) => {
-      const myParticipant = c.participants.find((p) => p.userId === userId);
-      const lastReadAt = myParticipant?.lastReadAt || new Date(0);
+  // Build per-conversation unread count filters
+  const unreadFilters = conversations.map((c) => {
+    const myParticipant = c.participants.find((p) => p.userId === userId);
+    const lastReadAt = myParticipant?.lastReadAt || new Date(0);
+    return { conversationId: c.id, lastReadAt };
+  });
 
-      const unreadCount = await prisma.message.count({
+  // Batch query: get all unread counts in a single query using groupBy
+  const unreadCounts = conversations.length > 0
+    ? await prisma.message.groupBy({
+        by: ['conversationId'],
         where: {
-          conversationId: c.id,
-          createdAt: { gt: lastReadAt },
+          conversationId: { in: conversations.map((c) => c.id) },
           senderId: { not: userId },
+          OR: unreadFilters.map((f) => ({
+            conversationId: f.conversationId,
+            createdAt: { gt: f.lastReadAt },
+          })),
         },
-      });
+        _count: { id: true },
+      })
+    : [];
 
-      return {
-        id: c.id,
-        title: c.title,
-        isGroup: c.isGroup,
-        lastMessage: c.messages[0] || null,
-        participants: c.participants.map((p) => p.user),
-        updatedAt: c.updatedAt,
-        unreadCount,
-      };
-    })
-  );
+  const unreadMap = new Map(unreadCounts.map((u) => [u.conversationId, u._count.id]));
 
-  return results;
+  return conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    isGroup: c.isGroup,
+    lastMessage: c.messages[0] || null,
+    participants: c.participants.map((p) => p.user),
+    updatedAt: c.updatedAt,
+    unreadCount: unreadMap.get(c.id) || 0,
+  }));
 }
 
 export async function createConversation(centerId: string, creatorId: string, data: {

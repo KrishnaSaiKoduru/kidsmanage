@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { api } from '../lib/api';
 
@@ -10,6 +10,8 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Guard to prevent onAuthStateChange from interfering during explicit signIn/signUp
+  const authInProgress = useRef(false);
 
   useEffect(() => {
     // Get initial session
@@ -26,7 +28,10 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s) {
-        handleSessionReady(s);
+        // Skip if signIn/signUp is handling auth explicitly to avoid race condition
+        if (!authInProgress.current) {
+          handleSessionReady(s);
+        }
       } else {
         setUser(null);
         setLoading(false);
@@ -74,52 +79,67 @@ export function AuthProvider({ children }) {
   }
 
   async function signUp({ email, password, centerName, directorName, phone }) {
-    // Register via backend (creates Supabase user + Center + DB User)
-    const result = await api.post('/auth/register', {
-      email,
-      password,
-      centerName,
-      directorName,
-      phone,
-    });
+    authInProgress.current = true;
+    try {
+      // Register via backend (creates Supabase user + Center + DB User)
+      const result = await api.post('/auth/register', {
+        email,
+        password,
+        centerName,
+        directorName,
+        phone,
+      });
 
-    // Sign in with Supabase to get session
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+      // Sign in with Supabase to get session
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
-    // Explicitly fetch profile instead of relying on listener race
-    await fetchProfile();
+      // Explicitly fetch profile instead of relying on listener race
+      await fetchProfile();
 
-    return result;
+      return result;
+    } finally {
+      authInProgress.current = false;
+    }
   }
 
   async function signUpUser({ name, email, password, phone, role, joinCode }) {
-    // Register parent/caretaker via backend (creates Supabase user + links to center via join code)
-    const result = await api.post('/auth/register-user', {
-      name,
-      email,
-      password,
-      phone,
-      role,
-      joinCode,
-    });
+    authInProgress.current = true;
+    try {
+      // Register parent/caretaker via backend (creates Supabase user + links to center via join code)
+      const result = await api.post('/auth/register-user', {
+        name,
+        email,
+        password,
+        phone,
+        role,
+        joinCode,
+      });
 
-    // Sign in with Supabase to get session
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+      // Sign in with Supabase to get session
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
-    // Explicitly fetch profile instead of relying on listener race
-    await fetchProfile();
+      // Explicitly fetch profile instead of relying on listener race
+      await fetchProfile();
 
-    return result;
+      return result;
+    } finally {
+      authInProgress.current = false;
+    }
   }
 
   async function signIn({ email, password }) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    authInProgress.current = true;
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
 
-    // Explicitly fetch profile to avoid race with onAuthStateChange listener
-    await fetchProfile();
+      // Explicitly fetch profile to avoid race with onAuthStateChange listener
+      await fetchProfile();
+    } finally {
+      authInProgress.current = false;
+    }
   }
 
   async function signInWithGoogle({ role, joinCode, name } = {}) {
