@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh auth status 2>&1 && git --version 2>&1)",
+      "Bash(cd:*)",
+      "Bash(cd \"D:/AI Projects/SaaS\" && gh repo create kidsmanage --private --description \"All-in-One Childcare Management SaaS Platform\" --source . --remote origin 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS\" && git push -u origin main 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS\" && git add backend_requirements_checklist.md && git commit -m \"$\\(cat <<'EOF'\nUpdate backend requirements checklist with free/easy service choices\n\nPre-selected free tiers for all services, removed paid options \\(Twilio,\nOpenAI\\) with notes on when to add them later. Simplified to only ask\nquestions that genuinely need user input.\n\nCo-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>\nEOF\n\\)\" && git push 2>&1)",
+      "Bash(tail:*)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && npx prisma generate 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && npx prisma migrate dev --name init 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && node -e \"const z = require\\('zod'\\); console.log\\('Zod version:', z.z ? 'v4' : 'v3'\\)\" 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && node -e \"\nconst { z } = require\\('zod'\\);\ntry {\n  const s = z.object\\({ email: z.string\\(\\).email\\(\\), name: z.string\\(\\).min\\(1\\) }\\);\n  console.log\\('Zod works:', s.parse\\({ email: 'test@test.com', name: 'Test' }\\)\\);\n} catch\\(e\\) { console.error\\('Zod error:', e.message\\); }\n\" 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && node -e \"const { ZodError } = require\\('zod'\\); console.log\\('ZodError:', typeof ZodError\\);\" 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && node -e \"const express = require\\('express'\\); console.log\\('Express version:', require\\('express/package.json'\\).version\\);\" 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && npx tsc --noEmit 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/backend\" && npx ts-node-dev --respawn --transpile-only src/index.ts 2>&1)",
+      "Bash(cd \"D:/AI Projects/SaaS/frontend\" && npx vite --host 2>&1)",
+      "Bash(sleep 6:*)",
+      "Bash(tasklist:*)",
+      "Bash(wmic process:*)",
+      "Bash(taskkill:*)",
+      "Bash(npx prisma:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(node:*)",
+      "Bash(xargs grep:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite:*)",
+      "Bash(curl:*)",
+      "Bash(npm run:*)"
+    ]
+  }
+}

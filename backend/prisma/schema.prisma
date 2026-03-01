@@ -1,0 +1,322 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  CARETAKER
+  PARENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  DEACTIVATED
+}
+
+enum ChildStatus {
+  ENROLLED
+  WAITLISTED
+  WITHDRAWN
+  GRADUATED
+}
+
+enum CheckInMethod {
+  MANUAL
+  QR_CODE
+  PIN
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PlanTier {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WAITLISTED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  TOUR_SCHEDULED
+  TOUR_COMPLETED
+  ENROLLED
+  LOST
+}
+
+// ─── Core Tables ────────────────────────────────────────────────────────────
+
+model Center {
+  id               String   @id @default(cuid())
+  name             String
+  address          String?
+  phone            String?
+  email            String?
+  licenseNumber    String?
+  capacity         Int      @default(0)
+  stripeCustomerId String?
+  planTier         PlanTier @default(FREE)
+  joinCode         String?  @unique
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  users                  User[]
+  children               Child[]
+  attendanceRecords      AttendanceRecord[]
+  invoices               Invoice[]
+  enrollmentApplications EnrollmentApplication[]
+  conversations          Conversation[]
+  activityLogs           ActivityLog[]
+  leads                  Lead[]
+  notifications          Notification[]
+}
+
+model User {
+  id         String     @id @default(cuid())
+  supabaseId String     @unique
+  centerId   String?
+  name       String
+  email      String     @unique
+  phone      String?
+  role       UserRole   @default(PARENT)
+  status     UserStatus @default(ACTIVE)
+  avatarUrl  String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  center         Center?        @relation(fields: [centerId], references: [id])
+  parentChildren ParentChild[]  @relation("ParentUser")
+  invoices       Invoice[]      @relation("InvoiceParent")
+  sentMessages   Message[]      @relation("MessageSender")
+  notifications  Notification[]
+  conversationParticipants ConversationParticipant[]
+
+  @@index([centerId])
+  @@index([supabaseId])
+}
+
+model Child {
+  id        String      @id @default(cuid())
+  centerId  String
+  firstName String
+  lastName  String
+  dateOfBirth DateTime
+  room      String?
+  allergies String?
+  notes     String?
+  photoUrl  String?
+  status    ChildStatus @default(ENROLLED)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  center            Center             @relation(fields: [centerId], references: [id])
+  parentChildren    ParentChild[]
+  attendanceRecords AttendanceRecord[]
+  invoices          Invoice[]
+  activityLogs      ActivityLog[]
+
+  @@index([centerId])
+}
+
+model ParentChild {
+  id           String @id @default(cuid())
+  parentId     String
+  childId      String
+  relationship String @default("Parent")
+
+  parent User  @relation("ParentUser", fields: [parentId], references: [id])
+  child  Child @relation(fields: [childId], references: [id])
+
+  @@unique([parentId, childId])
+}
+
+// ─── Attendance ─────────────────────────────────────────────────────────────
+
+model AttendanceRecord {
+  id        String        @id @default(cuid())
+  childId   String
+  centerId  String
+  date      DateTime      @default(now()) @db.Date
+  checkIn   DateTime?
+  checkOut  DateTime?
+  method    CheckInMethod @default(MANUAL)
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  child  Child  @relation(fields: [childId], references: [id])
+  center Center @relation(fields: [centerId], references: [id])
+
+  @@index([centerId, date])
+  @@index([childId, date])
+}
+
+// ─── Billing ────────────────────────────────────────────────────────────────
+
+model Invoice {
+  id                String        @id @default(cuid())
+  centerId          String
+  childId           String?
+  parentId          String?
+  amount            Float
+  tax               Float         @default(0)
+  total             Float
+  status            InvoiceStatus @default(DRAFT)
+  dueDate           DateTime
+  paidAt            DateTime?
+  stripePaymentId   String?
+  lineItems         Json?
+  lateFee           Float         @default(0)
+  gracePeriodDays   Int           @default(7)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  center Center @relation(fields: [centerId], references: [id])
+  child  Child? @relation(fields: [childId], references: [id])
+  parent User?  @relation("InvoiceParent", fields: [parentId], references: [id])
+
+  @@index([centerId])
+  @@index([parentId])
+}
+
+// ─── Enrollment ─────────────────────────────────────────────────────────────
+
+model EnrollmentApplication {
+  id         String            @id @default(cuid())
+  centerId   String
+  childName  String
+  parentName String
+  parentEmail String
+  parentPhone String?
+  dateOfBirth DateTime
+  notes      String?
+  status     ApplicationStatus @default(PENDING)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  center Center @relation(fields: [centerId], references: [id])
+
+  @@index([centerId])
+}
+
+// ─── Messaging ──────────────────────────────────────────────────────────────
+
+model Conversation {
+  id        String   @id @default(cuid())
+  centerId  String
+  title     String?
+  isGroup   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  center       Center                    @relation(fields: [centerId], references: [id])
+  messages     Message[]
+  participants ConversationParticipant[]
+
+  @@index([centerId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  senderId       String
+  content        String
+  type           String   @default("text")
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([conversationId])
+}
+
+model ConversationParticipant {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  lastReadAt     DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+// ─── Activity Logs ──────────────────────────────────────────────────────────
+
+model ActivityLog {
+  id            String   @id @default(cuid())
+  centerId      String
+  childId       String?
+  category      String
+  title         String
+  notes         String?
+  scheduledTime String?
+  date          DateTime @default(now()) @db.Date
+  createdAt     DateTime @default(now())
+
+  center Center @relation(fields: [centerId], references: [id])
+  child  Child? @relation(fields: [childId], references: [id])
+
+  @@index([centerId, date])
+}
+
+// ─── Marketing ──────────────────────────────────────────────────────────────
+
+model Lead {
+  id        String     @id @default(cuid())
+  centerId  String
+  name      String
+  email     String
+  phone     String?
+  source    String?
+  status    LeadStatus @default(NEW)
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  center Center @relation(fields: [centerId], references: [id])
+
+  @@index([centerId])
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+model Notification {
+  id        String   @id @default(cuid())
+  centerId  String
+  userId    String
+  title     String
+  body      String?
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  center Center @relation(fields: [centerId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@index([userId, read])
+  @@index([centerId])
+}
