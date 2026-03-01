@@ -25,7 +25,20 @@ const PORT = process.env.PORT || 3001;
 // Global middleware
 app.use(helmet());
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    const allowed = [
+      process.env.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://localhost:4173',
+    ].filter(Boolean) as string[];
+
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin || allowed.some((url) => origin === url || origin === url.replace(/\/$/, ''))) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS: origin ${origin} not allowed`));
+    }
+  },
   credentials: true,
 }));
 app.use(generalLimiter);
@@ -64,4 +77,5 @@ app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`KidsManage API running on http://localhost:${PORT}`);
+  console.log(`CORS allowed origin: ${process.env.FRONTEND_URL || '(not set — using localhost only)'}`);
 });
