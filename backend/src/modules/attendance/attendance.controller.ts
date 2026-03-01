@@ -35,7 +35,8 @@ export async function checkOut(req: Request, res: Response, next: NextFunction) 
 
 export async function getTodayAttendance(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await attendanceService.getTodayAttendance(req.user!.centerId!);
+    const date = req.query.date as string | undefined;
+    const result = await attendanceService.getTodayAttendance(req.user!.centerId!, date);
     res.json(result);
   } catch (err) {
     next(err);
@@ -44,7 +45,8 @@ export async function getTodayAttendance(req: Request, res: Response, next: Next
 
 export async function getMyChildrenAttendance(req: Request, res: Response, next: NextFunction) {
   try {
-    const result = await attendanceService.getMyChildrenAttendance(req.user!.centerId!, req.user!.id);
+    const date = req.query.date as string | undefined;
+    const result = await attendanceService.getMyChildrenAttendance(req.user!.centerId!, req.user!.id, date);
     res.json(result);
   } catch (err) {
     next(err);

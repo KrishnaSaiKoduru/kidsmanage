@@ -118,8 +118,8 @@ export async function checkOut(centerId: string, data: {
   return updated;
 }
 
-export async function getTodayAttendance(centerId: string) {
-  const today = new Date();
+export async function getTodayAttendance(centerId: string, dateStr?: string) {
+  const today = dateStr ? new Date(dateStr) : new Date();
   today.setHours(0, 0, 0, 0);
 
   const records = await prisma.attendanceRecord.findMany({
@@ -152,8 +152,8 @@ export async function getTodayAttendance(centerId: string) {
   };
 }
 
-export async function getMyChildrenAttendance(centerId: string, parentId: string) {
-  const today = new Date();
+export async function getMyChildrenAttendance(centerId: string, parentId: string, dateStr?: string) {
+  const today = dateStr ? new Date(dateStr) : new Date();
   today.setHours(0, 0, 0, 0);
 
   // Get children linked to this parent
