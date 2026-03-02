@@ -71,9 +71,23 @@ export async function authMiddleware(req: Request, res: Response, next: NextFunc
       return;
     }
 
-    const dbUser = await prisma.user.findUnique({
+    let dbUser = await prisma.user.findUnique({
       where: { supabaseId: supabaseUser.id },
     });
+
+    // If not found by supabaseId, try by email (handles Google sign-in for email/password accounts)
+    if (!dbUser && supabaseUser.email) {
+      dbUser = await prisma.user.findUnique({
+        where: { email: supabaseUser.email },
+      });
+      // Link the new Supabase identity to the existing DB user
+      if (dbUser) {
+        await prisma.user.update({
+          where: { id: dbUser.id },
+          data: { supabaseId: supabaseUser.id },
+        });
+      }
+    }
 
     if (!dbUser) {
       res.status(401).json({ error: 'User not found in database' });

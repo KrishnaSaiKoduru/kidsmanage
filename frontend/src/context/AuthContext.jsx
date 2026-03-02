@@ -12,19 +12,20 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   // Guard to prevent onAuthStateChange from interfering during explicit signIn/signUp
   const authInProgress = useRef(false);
+  // Prevent concurrent handleSessionReady calls (e.g. getSession + onAuthStateChange)
+  const sessionHandling = useRef(false);
 
   useEffect(() => {
-    // Get initial session
+    // Get initial session — only handle no-session case to set loading false.
+    // If a session exists, let onAuthStateChange handle it to avoid double calls.
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
-      if (s) {
-        handleSessionReady(s);
-      } else {
+      if (!s) {
         setLoading(false);
       }
     });
 
-    // Listen for auth changes
+    // Listen for auth changes (fires INITIAL_SESSION on setup, covers getSession case)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s) {
@@ -42,6 +43,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function handleSessionReady(s) {
+    // Prevent concurrent calls (getSession + onAuthStateChange can both trigger this)
+    if (sessionHandling.current) return;
+    sessionHandling.current = true;
     setLoading(true);
     try {
       const profile = await fetchProfile();
@@ -55,6 +59,13 @@ export function AuthProvider({ children }) {
         localStorage.removeItem(OAUTH_STORAGE_KEY);
         // Retry fetching profile after completing registration
         await fetchProfile();
+      } else {
+        // Has Supabase session but no DB user and no pending OAuth data.
+        // Sign out to prevent stuck state where user has session but can't access portal.
+        console.warn('[Auth] Supabase session exists but no DB user found. Signing out.');
+        await supabase.auth.signOut();
+        setUser(null);
+        setSession(null);
       }
     } catch (err) {
       console.error('[Auth] Session ready handler failed:', err);
@@ -62,6 +73,7 @@ export function AuthProvider({ children }) {
       localStorage.removeItem(OAUTH_STORAGE_KEY);
       setUser(null);
     } finally {
+      sessionHandling.current = false;
       setLoading(false);
     }
   }
