@@ -23,6 +23,9 @@ import notificationRoutes from './modules/notifications/notifications.routes';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust Railway's reverse proxy for correct client IP (rate limiting, logging)
+app.set('trust proxy', 1);
+
 // Global middleware
 app.use(helmet());
 app.use(cors({

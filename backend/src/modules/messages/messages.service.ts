@@ -37,27 +37,31 @@ export async function listConversations(centerId: string, userId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  // Calculate unread counts per conversation individually to avoid
-  // cross-contamination from complex OR queries in groupBy
+  // Calculate unread counts using batched transaction (single DB connection)
+  // to avoid connection pool exhaustion from concurrent queries on Railway
   const unreadMap = new Map<string, number>();
 
   if (conversations.length > 0) {
-    const countPromises = conversations.map(async (c) => {
-      const myParticipant = c.participants.find((p) => p.userId === userId);
-      const lastReadAt = myParticipant?.lastReadAt || new Date(0);
-      const count = await prisma.message.count({
-        where: {
-          conversationId: c.id,
-          senderId: { not: userId },
-          createdAt: { gt: lastReadAt },
-        },
+    try {
+      const countQueries = conversations.map((c) => {
+        const myParticipant = c.participants.find((p) => p.userId === userId);
+        const lastReadAt = myParticipant?.lastReadAt || new Date(0);
+        return prisma.message.count({
+          where: {
+            conversationId: c.id,
+            senderId: { not: userId },
+            createdAt: { gt: lastReadAt },
+          },
+        });
       });
-      return { conversationId: c.id, count };
-    });
 
-    const counts = await Promise.all(countPromises);
-    for (const { conversationId, count } of counts) {
-      unreadMap.set(conversationId, count);
+      const counts = await prisma.$transaction(countQueries);
+      conversations.forEach((c, i) => {
+        unreadMap.set(c.id, counts[i]);
+      });
+    } catch (err) {
+      console.error('[Messages] Failed to calculate unread counts:', err);
+      // Conversations still load, just without unread badges
     }
   }
 
@@ -161,13 +165,16 @@ export async function getMessages(centerId: string, conversationId: string, user
 
   const lastReadAt = conversation.participants[0]?.lastReadAt || new Date(0);
 
+  // Load last 200 messages (desc) then reverse for chronological display
   const messages = await prisma.message.findMany({
     where: { conversationId },
     include: {
       sender: { select: { id: true, name: true, role: true, avatarUrl: true } },
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
+    take: 200,
   });
+  messages.reverse();
 
   return messages.map((m) => ({
     ...m,

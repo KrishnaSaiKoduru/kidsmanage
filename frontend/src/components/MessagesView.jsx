@@ -25,6 +25,8 @@ export default function MessagesView() {
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [showNewModal, setShowNewModal] = useState(false);
   const messagesEndRef = useRef(null);
+  const convoPollRef = useRef(false);  // Guard: prevent overlapping conversation polls
+  const msgPollRef = useRef(false);    // Guard: prevent overlapping message polls
   const { user } = useAuth();
   const toast = useToast();
 
@@ -36,10 +38,13 @@ export default function MessagesView() {
   const [groupTitle, setGroupTitle] = useState('');
 
   const fetchConversations = (showErrors = true) => {
+    // Skip if a poll is already in-flight (prevents request pileup on slow connections)
+    if (!showErrors && convoPollRef.current) return;
+    convoPollRef.current = true;
     api.get('/messages/conversations')
-      .then(setConversations)
+      .then((data) => setConversations(Array.isArray(data) ? data : []))
       .catch((err) => { if (showErrors) toast.error(err.message); })
-      .finally(() => setLoading(false));
+      .finally(() => { convoPollRef.current = false; setLoading(false); });
   };
 
   useEffect(() => { fetchConversations(); }, []);
@@ -52,13 +57,15 @@ export default function MessagesView() {
     const startPolling = () => {
       convoInterval = setInterval(() => fetchConversations(false), 10000);
       msgInterval = setInterval(() => {
-        if (!activeId) return;
+        if (!activeId || msgPollRef.current) return;
+        msgPollRef.current = true;
         api.get(`/messages/conversations/${activeId}/messages`).then((msgs) => {
-          setMessages(msgs);
-          if (msgs.some((m) => m.isUnread)) {
+          const msgArray = Array.isArray(msgs) ? msgs : [];
+          setMessages(msgArray);
+          if (msgArray.some((m) => m.isUnread)) {
             markAsRead(activeId);
           }
-        }).catch(() => {});
+        }).catch(() => {}).finally(() => { msgPollRef.current = false; });
       }, 10000);
     };
 
