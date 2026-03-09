@@ -302,7 +302,7 @@ export default function ActivitiesView({ user }) {
       endpoint = `/activities?date=${selectedDate}`;
     }
     api.get(endpoint)
-      .then(setActivities)
+      .then((data) => setActivities(Array.isArray(data) ? data : []))
       .catch((err) => toast.error(err.message))
       .finally(() => setLoading(false));
   }, [selectedDate, isParent, selectedChildId]);

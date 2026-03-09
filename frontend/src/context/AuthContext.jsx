@@ -14,6 +14,9 @@ export function AuthProvider({ children }) {
   const authInProgress = useRef(false);
   // Prevent concurrent handleSessionReady calls (e.g. getSession + onAuthStateChange)
   const sessionHandling = useRef(false);
+  // Once profile is loaded, skip re-running handleSessionReady on token refreshes
+  // to prevent the app from resetting to dashboard when switching browser tabs
+  const profileLoaded = useRef(false);
 
   useEffect(() => {
     // Get initial session — only handle no-session case to set loading false.
@@ -29,13 +32,16 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
       if (s) {
-        // Skip if signIn/signUp is handling auth explicitly to avoid race condition
-        if (!authInProgress.current) {
+        // Skip if signIn/signUp is handling auth explicitly to avoid race condition.
+        // Also skip if profile is already loaded (e.g. TOKEN_REFRESHED on tab switch)
+        // to prevent the app from resetting to the dashboard view.
+        if (!authInProgress.current && !profileLoaded.current) {
           handleSessionReady(s);
         }
       } else {
         setUser(null);
         setLoading(false);
+        profileLoaded.current = false;
       }
     });
 
@@ -103,6 +109,7 @@ export function AuthProvider({ children }) {
     try {
       const profile = await api.get('/auth/me');
       setUser(profile);
+      profileLoaded.current = true;
       return profile;
     } catch (err) {
       console.error('[Auth] Failed to fetch profile:', err.message);
@@ -201,6 +208,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(OAUTH_STORAGE_KEY);
     setUser(null);
     setSession(null);
+    profileLoaded.current = false;
   }
 
   return (
