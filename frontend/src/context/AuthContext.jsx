@@ -51,6 +51,10 @@ export function AuthProvider({ children }) {
       const profile = await fetchProfile();
       if (profile) return; // already registered, done
 
+      // fetchProfile returned null — could be "user not found" (401) or a transient error.
+      // Check if we got a 401 by seeing if user was cleared (fetchProfile only clears on 401).
+      // For transient errors (network/500), user state is preserved and we skip sign-out.
+
       // No DB user — check if there's pending OAuth registration data
       const pending = localStorage.getItem(OAUTH_STORAGE_KEY);
       if (pending) {
@@ -60,18 +64,35 @@ export function AuthProvider({ children }) {
         // Retry fetching profile after completing registration
         await fetchProfile();
       } else {
-        // Has Supabase session but no DB user and no pending OAuth data.
-        // Sign out to prevent stuck state where user has session but can't access portal.
-        console.warn('[Auth] Supabase session exists but no DB user found. Signing out.');
-        await supabase.auth.signOut();
-        setUser(null);
-        setSession(null);
+        // Only sign out if the server confirmed user doesn't exist (401).
+        // For network errors or server errors, keep the session alive — Supabase
+        // will auto-refresh the token and the next attempt should succeed.
+        try {
+          const verifyRes = await api.get('/auth/me');
+          if (verifyRes) {
+            setUser(verifyRes);
+            return;
+          }
+        } catch (verifyErr) {
+          if (verifyErr.status === 401) {
+            console.warn('[Auth] Supabase session exists but no DB user found. Signing out.');
+            await supabase.auth.signOut();
+            setUser(null);
+            setSession(null);
+            return;
+          }
+        }
+        // Non-401 error — keep session, don't sign out. The user may recover.
+        console.warn('[Auth] Could not verify profile (server/network issue). Keeping session.');
       }
     } catch (err) {
       console.error('[Auth] Session ready handler failed:', err);
       // Clear stale OAuth data on failure so user isn't stuck
       localStorage.removeItem(OAUTH_STORAGE_KEY);
-      setUser(null);
+      // Don't clear user on transient errors — only on confirmed 401
+      if (err.status === 401) {
+        setUser(null);
+      }
     } finally {
       sessionHandling.current = false;
       setLoading(false);
@@ -85,7 +106,12 @@ export function AuthProvider({ children }) {
       return profile;
     } catch (err) {
       console.error('[Auth] Failed to fetch profile:', err.message);
-      setUser(null);
+      // Only clear user if server explicitly says user not found (401).
+      // For network errors or server errors (500), keep existing user state
+      // so transient failures don't log the user out.
+      if (err.status === 401) {
+        setUser(null);
+      }
       return null;
     }
   }

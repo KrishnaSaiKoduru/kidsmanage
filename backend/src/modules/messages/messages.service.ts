@@ -37,30 +37,29 @@ export async function listConversations(centerId: string, userId: string) {
     orderBy: { updatedAt: 'desc' },
   });
 
-  // Build per-conversation unread count filters
-  const unreadFilters = conversations.map((c) => {
-    const myParticipant = c.participants.find((p) => p.userId === userId);
-    const lastReadAt = myParticipant?.lastReadAt || new Date(0);
-    return { conversationId: c.id, lastReadAt };
-  });
+  // Calculate unread counts per conversation individually to avoid
+  // cross-contamination from complex OR queries in groupBy
+  const unreadMap = new Map<string, number>();
 
-  // Batch query: get all unread counts in a single query using groupBy
-  const unreadCounts = conversations.length > 0
-    ? await prisma.message.groupBy({
-        by: ['conversationId'],
+  if (conversations.length > 0) {
+    const countPromises = conversations.map(async (c) => {
+      const myParticipant = c.participants.find((p) => p.userId === userId);
+      const lastReadAt = myParticipant?.lastReadAt || new Date(0);
+      const count = await prisma.message.count({
         where: {
-          conversationId: { in: conversations.map((c) => c.id) },
+          conversationId: c.id,
           senderId: { not: userId },
-          OR: unreadFilters.map((f) => ({
-            conversationId: f.conversationId,
-            createdAt: { gt: f.lastReadAt },
-          })),
+          createdAt: { gt: lastReadAt },
         },
-        _count: { id: true },
-      })
-    : [];
+      });
+      return { conversationId: c.id, count };
+    });
 
-  const unreadMap = new Map(unreadCounts.map((u) => [u.conversationId, u._count.id]));
+    const counts = await Promise.all(countPromises);
+    for (const { conversationId, count } of counts) {
+      unreadMap.set(conversationId, count);
+    }
+  }
 
   return conversations.map((c) => ({
     id: c.id,

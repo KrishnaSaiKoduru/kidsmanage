@@ -1,9 +1,19 @@
 import { prisma } from '../../lib/prisma';
 import { AppError } from '../../middleware/errorHandler';
 
+function toUTCDate(dateStr?: string): Date {
+  if (dateStr) {
+    // Parse YYYY-MM-DD explicitly as UTC to avoid timezone shifts
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m - 1, d));
+  }
+  // Default to today in UTC
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
 export async function listActivities(centerId: string, date?: string) {
-  const filterDate = date ? new Date(date) : new Date();
-  filterDate.setHours(0, 0, 0, 0);
+  const filterDate = toUTCDate(date);
 
   return prisma.activityLog.findMany({
     where: { centerId, date: filterDate },
@@ -27,8 +37,7 @@ export async function createActivity(centerId: string, data: {
   childId?: string;
   date?: string;
 }) {
-  const activityDate = data.date ? new Date(data.date) : new Date();
-  activityDate.setHours(0, 0, 0, 0);
+  const activityDate = toUTCDate(data.date);
 
   // Create activity
   const activity = await prisma.activityLog.create({
@@ -210,8 +219,7 @@ export async function markAllDone(centerId: string, activityId: string, userId: 
 
 // Get activities for a specific child (parent view)
 export async function listChildActivities(centerId: string, childId: string, date?: string) {
-  const filterDate = date ? new Date(date) : new Date();
-  filterDate.setHours(0, 0, 0, 0);
+  const filterDate = toUTCDate(date);
 
   return prisma.activityLog.findMany({
     where: { centerId, date: filterDate },
